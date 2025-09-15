@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="ja" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="ja" > <!--<![endif]-->
+<head>
+<meta charset="utf-8">
+<meta property="og:locale" content="ja_JP" />
+<meta name = "viewport" content = "width=device-width, initial-scale=1">
+<title>コイン計数用ツール</title>
+<link rel="stylesheet" type="text/css" href="style.css">
+</head>
+<body style="margin:3%;width:96%;height:100%;overflow-x:hidden;">
+コイン計数用ツール<br>
+<div align=right><a href="index.html"><img src="./image/back.png"></a></div>
+<div id="maintable"></div>
+<script type="text/javascript">
+var i,j,s,ss;
+
+var viewLane=1;		//	表示中の現在レーン(1～7)
+var viewMode=0;		//	0:現在値  1:目標値
+var viewOrder=1;	//	0:降順    1:昇順
+
+// コインタイプ一覧
+var coinType=new Array(1000,500,100,50,10,5,1);
+
+// 平日デフォルト
+defaultA=new Array("120,70,70,70,70,70,70","120,70,70,70,70,70,70","120,70,70,70,70,70,70","120,70,70,70,70,70,70","50,50,50,50,50,50,50","50,50,50,50,50,50,50","40,40,40,30,30,30,30");
+
+// 土日祝日デフォルト
+defaultB=new Array("150,80,80,80,80,80,80","150,80,80,80,80,80,80","150,80,80,80,80,80,80","150,80,80,80,80,80,80","50,50,50,50,50,50,50","50,50,50,50,50,50,50","40,40,40,30,30,30,30");
+
+// 目標値テーブル
+var targets=new  Array(7);
+for(i=0;i<=6;i++){targets[i]=new Array(7);}
+
+// 現在値テーブル
+var tables=new  Array(7);
+for(i=0;i<=6;i++){tables[i]=new Array(7);}
+
+// 明日のデフォルト値を目標値テーブルにセットする
+if (isTomorrowWeekend())
+	{
+	targets=setDefaults(defaultB);		//	土日デフォルト
+	}
+else{
+	targets=setDefaults(defaultA);		//	平日デフォルト
+	}
+for(i=0;i<=6;i++)
+	{
+	console.log("目標値"+i+"="+targets[i]);
+	}
+drawLanes();	//	レーンを表示する
+document.getElementsByTagName("input")[0].focus();
+
+function drawLanes()
+	{
+	var i,j,s,ss;
+	var d1,d2,diff;
+	var buf="<select size=1 id='pulldown_lane' onchange='changeLanes()' style='font-size:120%;'>";
+	var totalKin=0;
+	for(i=1;i<=7;i++)
+		{
+		buf+="<option value="+i;
+		if (i==viewLane) buf+=" selected";
+		buf+=">"+i+"レーン</i>";
+		}
+	buf+="</select><br><br>";
+
+	buf+="<button style='font-size:120%' onclick='changeMode(";
+	if (viewMode==0)
+		{
+		buf+="1)'>現在値";
+		}
+	else{
+		buf+="0)'>目標値";
+		}
+	buf+="</button><br><br>";
+
+	buf+="<table border=1 cellspacing=0 cellpadding=4>";
+	if (viewMode==0)
+		{
+		buf+="<tr style='background-color:#aaccff'><td align=center onclick='changeOrder()' style='cursor:pointer;'>金種";
+		if (viewOrder==0) buf+="▼";else buf+="▲";
+		buf+="</td><td align=center>差分</td><td align=center>現在値</td></tr>";
+		}
+	else{
+		buf+="<tr style='background-color:#aaccff'><td align=center onclick='changeOrder()' style='cursor:pointer;'>金種";
+		if (viewOrder==0) buf+="▼";else buf+="▲";
+		buf+="</td><td align=center>目標値</td></tr>";
+		}
+
+	var loop1,loop2,loop3;
+	if (viewOrder==0)
+		{
+		i=0;
+		}
+	else{
+		i=coinType.length-1;
+		}
+
+	while(1==1)
+		{
+		buf+="<tr><td style='background-color:#3333ff;color:#ffffff;width:60px;text-align:right;font-weight:bold;'>";
+		buf+=coinType[i].toLocaleString('ja-JP')+"</td>";
+
+		//	目標合計を計算する（コインのみ）
+		if (coinType[i]<1000)
+			{
+			v=targets[viewLane-1][i];
+			if (v!="")
+				{
+				if (isNaN(v)==false)
+					{
+					totalKin+=parseInt(v,10)*parseInt(coinType[i],10);
+					}
+				}
+			}
+
+		//	差分列を表示する
+		if (viewMode==0)
+			{
+			buf+="<td style='width:60px;text-align:center;font-size:120%;background-color:#ededff;'>";
+			d1=targets[viewLane-1][i];
+			d2=tables[viewLane-1][i];
+			if ((d1!="")&&(d2!="")&&(isNaN(d1)==false)&&(isNaN(d2)==false))
+				{
+				dif=parseInt(d1,10)-parseInt(d2,10);
+				if (dif!=0)
+					{
+					buf+="<span style='color:";
+					if (dif>0) buf+="#0000ff;'>+"+dif;
+					if (dif<0) buf+="#ff0000;'>"+dif;
+					buf+="</span>";
+					}
+				}
+			buf+="</td>";
+			}
+		buf+="<td style='width:60px;'>";
+		buf+="<input type=number id='coin"+i+"' style='border:none;text-align:right;width:60px;font-size:120%;'";
+		buf+=" onfocus='this.select()' onchange='changeit("+i+")'"
+		buf+=" value='";
+		if (viewMode==0)
+			{
+			buf+=tables[viewLane-1][i];
+			}
+		else{
+			buf+=targets[viewLane-1][i];
+			}
+		buf+="'></td>";
+		buf+="</tr>";
+
+		if (viewOrder==0)
+			{
+			i++;
+			if (i>=coinType.length) break;
+			}
+		else{
+			i--;
+			if (i<0) break;
+			}
+		}
+	buf+="</table><br>";
+	buf+="コイン合計額：￥"+totalKin.toLocaleString('ja-JP')+"<br>";
+	if (viewMode==1)
+		{
+		buf+="<input type=button value='平日の目標値' onclick='presetDefault(0)'><br>";
+		buf+="<input type=button value='土日祝の目標値' onclick='presetDefault(1)'><br>";
+		}
+	document.getElementById("maintable").innerHTML=buf;
+	}
+
+function presetDefault(num)
+	{
+	if (num==0)
+		{
+		targets=setDefaults(defaultA);		//	平日デフォルト
+		}
+	else{
+		targets=setDefaults(defaultB);		//	土日祝デフォルト
+		}
+	drawLanes();
+	}
+
+function changeLanes()
+	{
+	viewLane=document.getElementById("pulldown_lane").selectedIndex+1;
+	drawLanes();
+	}
+
+function changeMode(mode)
+	{
+	viewMode=mode;
+	drawLanes();
+	}
+
+function changeOrder()
+	{
+	if (viewOrder==0) viewOrder=1;else viewOrder=0;
+	drawLanes();
+	}
+
+function changeit(p)
+	{
+	var v=document.getElementById("coin"+p).value;
+	var vv;
+	var d1,d2,dif,dview;
+	var nf=false;
+	v=v.trim();
+	if (isNaN(v)) v="";
+	else v=parseInt(v,10);
+	if (viewMode==0)
+		{
+		tables[viewLane-1][p]=v;
+		drawLanes();
+		}
+	else{
+		targets[viewLane-1][p]=v;
+		}
+	
+	if (v!="") nf=true;
+	if (nf)
+		{
+		p=p+1;
+		if (p>=7) p=0;
+		document.getElementById("coin"+p).focus();
+		}
+	}
+
+//----------------------------------------------------------
+// 翌日が土日であるかどうか返す
+function isTomorrowWeekend()
+	{
+	var today = new Date();
+	var tomorrow = new Date(today);
+	tomorrow.setDate(today.getDate() + 1);
+	var day = tomorrow.getDay(); // 0=日曜, 1=月曜, ..., 6=土曜
+	return day === 0 || day === 6;
+	}
+
+// デフォルト値を展開したテーブルを返す
+function setDefaults(src)
+	{
+	var i,j,s,v;
+	var tbl=new Array(7);
+	for(i=0;i<=6;i++)
+		{
+		tbl[i]=src[i].split(",");
+		}
+	return tbl;
+	}
+
+</script>
+</body>
+</html>
