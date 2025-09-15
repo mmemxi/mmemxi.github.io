@@ -8,7 +8,7 @@
 <title>コイン計数用ツール</title>
 <link rel="stylesheet" type="text/css" href="style.css">
 </head>
-<body style="margin:3%;width:96%;height:100%;overflow-x:hidden;">
+<body style="margin:3%;width:96%;height:100%;overflow-x:hidden;font-size:120%;">
 コイン計数用ツール<br>
 <div align=right><a href="index.html"><img src="./image/back.png"></a></div>
 <div id="maintable"></div>
@@ -159,11 +159,11 @@ function drawLanes()
 			}
 		}
 	buf+="</table><br>";
-	buf+="コイン合計額：￥"+totalKin.toLocaleString('ja-JP')+"<br>";
+	buf+="<div style='font-size:120%'>コイン合計額：￥"+totalKin.toLocaleString('ja-JP')+"</div><br>";
 	if (viewMode==1)
 		{
-		buf+="<input type=button value='平日の目標値' onclick='presetDefault(0)'><br>";
-		buf+="<input type=button value='土日祝の目標値' onclick='presetDefault(1)'><br>";
+		buf+="<button style='font-size:120%' onclick='presetDefault(0)'>平日の目標値</button><br>";
+		buf+="<button style='font-size:120%' onclick='presetDefault(1)'>土日祝の目標値</button><br>";
 		}
 	document.getElementById("maintable").innerHTML=buf;
 	}
@@ -219,8 +219,15 @@ function changeit(p)
 	if (v!="") nf=true;
 	if (nf)
 		{
-		p=p+1;
-		if (p>=7) p=0;
+		if (viewOrder==0)
+			{
+			p++;
+			if (p>=7) p=0;
+			}
+		else{
+			p--;
+			if (p<0) p=6;
+			}
 		document.getElementById("coin"+p).focus();
 		}
 	}
