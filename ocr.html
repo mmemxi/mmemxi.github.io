@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>tesseract.js OCR Sample</title>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.5/dist/tesseract.min.js"></script>
+</head>
+<body>
+  <h2>tesseract.js OCR デモ</h2>
+
+  <!-- 表の画像を指定 -->
+  <input type="file" id="upload" accept="image/*">
+  <pre id="result"></pre>
+
+  <script>
+    const upload = document.getElementById("upload");
+    const result = document.getElementById("result");
+
+    upload.addEventListener("change", async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      // ファイルをURL化
+      const imageUrl = URL.createObjectURL(file);
+
+      // OCR実行
+      const { data: { text } } = await Tesseract.recognize(
+        imageUrl,
+        'jpn+eng', // 日本語+英語
+        { logger: info => console.log(info) } // 進捗ログ
+      );
+
+      result.textContent = text;
+    });
+  </script>
+</body>
+</html>

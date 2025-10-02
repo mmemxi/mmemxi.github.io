@@ -34,7 +34,15 @@ for(i=0;i<=6;i++){targets[i]=new Array(7);}
 
 // 現在値テーブル
 var tables=new  Array(7);
-for(i=0;i<=6;i++){tables[i]=new Array(7);}
+for(i=0;i<=6;i++)
+	{
+	tables[i]=new Array(7);
+	for(j=0;j<=6;j++)
+		{
+		key=i+"&"+j;
+		tables[i][j]=getLocaldata(key);
+		}
+	}
 
 // 明日のデフォルト値を目標値テーブルにセットする
 if (isTomorrowWeekend())
@@ -73,7 +81,12 @@ function drawLanes()
 	else{
 		buf+="0)'>目標値";
 		}
-	buf+="</button><br><br>";
+	buf+="</button>";
+	if (viewMode==0)
+		{
+		buf+="<button style='font-size:120%' onclick='resetIt()'>リセット</button>";
+		}
+	buf+="<br><br>";
 
 	buf+="<table border=1 cellspacing=0 cellpadding=4>";
 	if (viewMode==0)
@@ -180,6 +193,20 @@ function presetDefault(num)
 	drawLanes();
 	}
 
+function resetIt()
+	{
+	var r=confirm("現在値をリセットしてもよろしいですか？");
+	if (!r) return;
+	var i,j;
+	for(i=0;i<=6;i++)
+		{
+		tables[viewLane-1][i]="";
+		key=(viewLane-1)+"&"+i;
+		setLocaldata(key,"");
+		}
+	drawLanes();
+	}
+
 function changeLanes()
 	{
 	viewLane=document.getElementById("pulldown_lane").selectedIndex+1;
@@ -210,6 +237,8 @@ function changeit(p)
 	if (viewMode==0)
 		{
 		tables[viewLane-1][p]=v;
+		key=(viewLane-1)+"&"+p;
+		setLocaldata(key,v);
 		drawLanes();
 		}
 	else{
@@ -253,6 +282,22 @@ function setDefaults(src)
 		tbl[i]=src[i].split(",");
 		}
 	return tbl;
+	}
+
+//---------------------------------------------------------------------
+// localdata関連処理
+//---------------------------------------------------------------------
+function getLocaldata(key)
+	{
+	var result="";
+	var ld=localStorage.getItem(key);
+	if (ld!=null) result=ld;
+	return result;
+	}
+
+function setLocaldata(key,val)
+	{
+	localStorage.setItem(key,val);
 	}
 
 </script>
