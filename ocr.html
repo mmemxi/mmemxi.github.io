@@ -26,8 +26,10 @@
       // OCR実行
       const { data: { text } } = await Tesseract.recognize(
         imageUrl,
-        'jpn+eng', // 日本語+英語
-        { logger: info => console.log(info) } // 進捗ログ
+        'eng',{
+        tessedit_char_whitelist: '0123456789',
+        logger: info => console.log(info)
+        }
       );
 
       result.textContent = text;
