@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <title>tesseract.js v5 数字のみOCR</title>
+  <!-- UMD版を読み込み -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body>
   <h2>tesseract.js v5 OCR（数字のみ抽出）</h2>
@@ -10,9 +12,7 @@
   <input type="file" id="upload" accept="image/*">
   <pre id="result"></pre>
 
-  <script type="module">
-    import { createWorker } from "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
-
+  <script>
     const upload = document.getElementById("upload");
     const result = document.getElementById("result");
 
@@ -20,18 +20,15 @@
       const file = event.target.files[0];
       if (!file) return;
 
-      // ワーカー作成（英語モデルで十分）
-      const worker = await createWorker("eng");
+      // UMD版では Tesseract.createWorker を使う
+      const worker = await Tesseract.createWorker("eng");
 
-      // 数字だけを対象に設定
       await worker.setParameters({
         tessedit_char_whitelist: "0123456789"
       });
 
-      // OCR実行
       const { data: { text } } = await worker.recognize(file);
 
-      // 出力（数字と改行以外を削除して整形）
       result.textContent = text.replace(/[^0-9\s]/g, "");
 
       await worker.terminate();

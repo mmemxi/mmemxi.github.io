@@ -13,11 +13,19 @@
 <div align=right><a href="index.html"><img src="./image/back.png"></a></div>
 <div id="maintable"></div>
 <script type="text/javascript">
+//----------------------------------------------------------------
 var i,j,s,ss;
 
 var viewLane=1;		//	表示中の現在レーン(1～7)
 var viewMode=0;		//	0:現在値  1:目標値
 var viewOrder=1;	//	0:降順    1:昇順
+var voiceMode=false;
+//----------------------------------------------------------------
+var inputs;
+var currentIndex = 0;
+var recognition;
+//----------------------------------------------------------------
+
 
 // コインタイプ一覧
 var coinType=new Array(1000,500,100,50,10,5,1);
@@ -56,6 +64,7 @@ for(i=0;i<=6;i++)
 	{
 	console.log("目標値"+i+"="+targets[i]);
 	}
+voiceMode=false;
 drawLanes();	//	レーンを表示する
 document.getElementsByTagName("input")[0].focus();
 
@@ -87,8 +96,10 @@ function drawLanes()
 		buf+="<button style='font-size:120%' onclick='resetIt()'>リセット</button>";
 		}
 	buf+="<br><br>";
+	
+	if (viewMode==0) buf+="<button id='voice' style='font-size:120%' onclick='voiceProcess()'>音声入力開始</button><br>";
 
-	buf+="<table border=1 cellspacing=0 cellpadding=4>";
+	buf+="<div id='fld'><table border=1 cellspacing=0 cellpadding=4>";
 	if (viewMode==0)
 		{
 		buf+="<tr style='background-color:#aaccff'><td align=center onclick='changeOrder()' style='cursor:pointer;'>金種";
@@ -131,7 +142,7 @@ function drawLanes()
 		//	差分列を表示する
 		if (viewMode==0)
 			{
-			buf+="<td style='width:60px;text-align:center;font-size:120%;background-color:#ededff;'>";
+			buf+="<td style='width:60px;text-align:center;font-size:120%;background-color:#ededff;' id='dif"+i+"'>";
 			d1=targets[viewLane-1][i];
 			d2=tables[viewLane-1][i];
 			if ((d1!="")&&(d2!="")&&(isNaN(d1)==false)&&(isNaN(d2)==false))
@@ -148,7 +159,7 @@ function drawLanes()
 			buf+="</td>";
 			}
 		buf+="<td style='width:60px;'>";
-		buf+="<input type=number id='coin"+i+"' style='border:none;text-align:right;width:60px;font-size:120%;'";
+		buf+="<input type=number maxlength='3' id='coin"+i+"' style='border:none;text-align:right;width:60px;font-size:120%;'";
 		buf+=" onfocus='this.select()' onchange='changeit("+i+")'"
 		buf+=" value='";
 		if (viewMode==0)
@@ -171,7 +182,7 @@ function drawLanes()
 			if (i<0) break;
 			}
 		}
-	buf+="</table><br>";
+	buf+="</table></div><br>";
 	buf+="<div style='font-size:120%'>コイン合計額：￥"+totalKin.toLocaleString('ja-JP')+"</div><br>";
 	if (viewMode==1)
 		{
@@ -300,6 +311,148 @@ function setLocaldata(key,val)
 	localStorage.setItem(key,val);
 	}
 
+//---------------------------------------------------------------------
+// 音声入力関係
+//---------------------------------------------------------------------
+function parseJapaneseNumber(text)
+	{
+	const map = {
+	"ぜろ":0,"れい":0,"いち":1,"に":2,"さん":3,"よん":4,"し":4,"ご":5,
+	"ろく":6,"なな":7,"しち":7,"はち":8,"きゅう":9,"く":9,
+	"じゅう":10,"じゅ":10,"ひゃく":100
+		};
+	text = text.replace(/\s/g, "").replace(/ー/g, ""); // 空白や長音削除
+
+	// 数字で話した場合（例：「２５」）
+	if (/^\d{1,3}$/.test(text))
+		{
+		const n = parseInt(text, 10);
+		return (n >= 0 && n <= 999) ? n : null;
+		}
+
+      let total = 0;
+      let hundreds = 0, tens = 0, ones = 0;
+
+      // 「～ひゃく～じゅう～」構造を解析
+      const h = text.split("ひゃく");
+      if (h.length > 1) {
+        const hundredPart = h[0];
+        hundreds = hundredPart ? (map[hundredPart] || 1) * 100 : 100;
+        text = h[1];
+      }
+
+      const j = text.split("じゅう");
+      if (j.length > 1) {
+        const tenPart = j[0];
+        tens = tenPart ? (map[tenPart] || 1) * 10 : 10;
+        text = j[1];
+      }
+
+      // 残りが一桁
+      if (text && map[text] != null) {
+        ones = map[text];
+      }
+
+      total = hundreds + tens + ones;
+      return total > 0 ? total : null;
+	}
+
+//---------------------------------------------------------------------
+function voiceProcess()
+	{
+	if (!('webkitSpeechRecognition' in window))
+		{
+		alert("このブラウザは音声認識に対応していません。");
+		return;
+		}
+
+	var dom=document.getElementById("voice");
+	if (voiceMode)
+		{
+		voiceMode=false;
+		if (recognition) {
+			recognition.onend = null;
+			recognition.stop();
+			recognition = null;
+			}
+		dom.innerText="音声入力開始";
+		}
+	else{
+		voiceMode=true;
+		dom.innerText="音声入力中断";
+		currentInput=0;
+		inputs = document.querySelectorAll("#fld input");
+		inputs[currentIndex].focus();
+		voiceInput();
+		}
+	}
+
+function voiceInput()
+	{
+	recognition = new webkitSpeechRecognition();
+	recognition.lang = "ja-JP";
+	recognition.interimResults = false;
+	recognition.continuous = false;
+
+	recognition.onresult = (event) => {
+		const result = event.results[0][0].transcript.trim();
+		const num = parseJapaneseNumber(result);
+		var y;
+		if (viewOrder==0)	y=currentIndex;
+					else	y=6-currentIndex;
+		if (num !== null && num >= 0 && num <= 999)
+			{
+			inputs[currentIndex].value = num;
+			tables[viewLane-1][y]=num;
+			var key=(viewLane-1)+"&"+y;
+			setLocaldata(key,num);
+			var d1=targets[viewLane-1][y];
+			var d2=num;
+			var buf="";
+			var dif=parseInt(d1,10)-parseInt(d2,10);
+			if (dif!=0)
+				{
+				buf="<span style='color:";
+				if (dif>0) buf+="#0000ff;'>+"+dif;
+				if (dif<0) buf+="#ff0000;'>"+dif;
+				buf+="</span>";
+				}
+			document.getElementById("dif"+y).innerHTML=buf;
+
+			currentIndex++;
+			if (currentIndex >= inputs.length)
+				{
+				recognition.stop();
+				currentIndex=0;
+				document.getElementById("voice").innerText="音声入力開始";
+				}
+			else{
+				inputs[currentIndex].focus();
+	            recognition.start(); // 次の入力へ
+				}
+			}
+		else{
+			alert("数字が認識できませんでした。もう一度お願いします。");
+			recognition.start(); // 同じフォームで待機
+			}
+		};
+
+	recognition.onerror = (event) => {
+		console.error("エラー:", event.error);
+		if (event.error !== "no-speech") {
+			recognition.stop();
+			}
+		};
+
+	// 全部終わる前に勝手に切れた場合、まだ残りがあれば再開
+	recognition.onend = () => {
+		if (currentIndex < inputs.length)
+			{
+			setTimeout(() => {if (recognition) recognition.start();}, 300);
+			}
+		};
+	recognition.start();
+	}
 </script>
 </body>
 </html>

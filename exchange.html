@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<title>金種最適化ツール（固定対応・localStorage保存）</title>
+<style>
+body { font-family: sans-serif; margin: 20px; }
+table { border-collapse: collapse; width: 100%; max-width: 1100px; }
+th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: right; }
+th { background-color: #f0f0f0; }
+input[type="number"] { width: 90px; text-align: right; }
+input[type="checkbox"] { transform: scale(1.1); }
+tfoot td { font-weight: bold; background-color: #fafafa; }
+button { margin-top: 10px; padding: 6px 12px; }
+</style>
+</head>
+<body>
+<h2>金種最適化ツール（修正版）</h2>
+
+<label>合計金額下限（円）：<input type="number" id="minAmount" value="0" step="1000"></label>
+<label>合計金額上限（円）：<input type="number" id="maxAmount" value="100000" step="1000"></label>
+<button onclick="calculate()">最適化計算</button>
+
+<table id="coinTable">
+  <thead>
+    <tr>
+      <th>金種</th>
+      <th>1本あたり枚数</th>
+      <th>現在本数</th>
+      <th>現在金額</th>
+      <th>差分本数（結果）</th>
+      <th>固定</th>
+      <th>計算後本数</th>
+      <th>算出結果（枚）</th>
+      <th>金額（円）</th>
+      <th>目標本数</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+  <tfoot>
+    <tr>
+      <td colspan="7" style="text-align:center;">合計</td>
+      <td id="totalCoins">0</td>
+      <td id="totalAmount">0</td>
+      <td></td>
+    </tr>
+  </tfoot>
+</table>
+
+<script>
+/* 設定 */
+const STORAGE_KEY = "coinData_v3";
+const coins = [
+  { label: "1000円", value: 1000, perUnit: 100 },
+  { label: "500円", value: 500, perUnit: 50 },
+  { label: "100円", value: 100, perUnit: 50 },
+  { label: "50円",  value: 50,  perUnit: 50 },
+  { label: "10円",  value: 10,  perUnit: 50 },
+  { label: "5円",   value: 5,   perUnit: 50 },
+  { label: "1円",   value: 1,   perUnit: 50 }
+];
+
+const tbody = document.querySelector("#coinTable tbody");
+
+/* localStorage読み書き */
+function loadSaved() {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+  } catch(e) {
+    return {};
+  }
+}
+function saveAll() {
+  const data = {
+    minAmount: parseInt(document.getElementById("minAmount").value,10) || 0,
+    maxAmount: parseInt(document.getElementById("maxAmount").value,10) || 0,
+    rows: []
+  };
+  document.querySelectorAll("#coinTable tbody tr").forEach((tr,i)=>{
+    data.rows[i] = {
+      currentUnits: tr.querySelector(".currentUnits").value,
+      targetUnits:  tr.querySelector(".targetUnits").value,
+      diffUnits:    tr.querySelector(".diffUnits").value,
+      fixed:        tr.querySelector(".fixed").checked
+    };
+  });
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+/* テーブル構築 */
+function createTable() {
+  const saved = loadSaved();
+
+  // savedのmin/maxを復元（あれば）
+  if (saved.minAmount !== undefined) document.getElementById("minAmount").value = saved.minAmount;
+  if (saved.maxAmount !== undefined) document.getElementById("maxAmount").value = saved.maxAmount;
+
+  tbody.innerHTML = "";
+  coins.forEach((c, i) => {
+    const savedRow = (saved.rows && saved.rows[i]) ? saved.rows[i] : {};
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${c.label}</td>
+      <td>${c.perUnit}</td>
+      <td><input type="number" class="currentUnits" value="${savedRow.currentUnits ?? 0}" min="0"></td>
+      <td class="currentAmount">0</td>
+      <td><input type="number" class="diffUnits" value="${savedRow.diffUnits ?? 0}" min="0"></td>
+      <td style="text-align:center;"><input type="checkbox" class="fixed" ${savedRow.fixed ? "checked":""}></td>
+      <td class="afterUnits">0</td>
+      <td class="resultCount">0</td>
+      <td class="resultAmount">0</td>
+      <td><input type="number" class="targetUnits" value="${savedRow.targetUnits ?? 0}" min="0"></td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  // イベント: 入力変更で自動再計算＋保存
+  document.querySelectorAll(".currentUnits, .targetUnits, .diffUnits, .fixed").forEach(el=>{
+    el.addEventListener("input", ()=>{ updateAmounts(); saveAll(); });
+    el.addEventListener("change", ()=>{ updateAmounts(); saveAll(); });
+  });
+
+  updateAmounts();
+}
+
+/* 表示を最新化（diffUnits→枚数・金額・合計） */
+function updateAmounts(){
+  let totalCoins = 0;
+  let totalAmount = 0;
+  document.querySelectorAll("#coinTable tbody tr").forEach((tr,i)=>{
+    const c = coins[i];
+    const current = parseInt(tr.querySelector(".currentUnits").value,10) || 0;
+    const diff = parseInt(tr.querySelector(".diffUnits").value,10) || 0;
+    const after = current + diff;
+    const currentAmount = current * c.perUnit * c.value;
+    const resultCount = diff * c.perUnit;
+    const resultAmount = resultCount * c.value;
+
+    tr.querySelector(".currentAmount").textContent = currentAmount.toLocaleString();
+    tr.querySelector(".afterUnits").textContent = after.toLocaleString();
+    tr.querySelector(".resultCount").textContent = resultCount.toLocaleString();
+    tr.querySelector(".resultAmount").textContent = resultAmount.toLocaleString();
+
+    totalCoins += resultCount;
+    totalAmount += resultAmount;
+  });
+  document.getElementById("totalCoins").textContent = totalCoins.toLocaleString();
+  document.getElementById("totalAmount").textContent = totalAmount.toLocaleString();
+}
+
+/* 最適化ボタン */
+function calculate() {
+  // read min/max safely
+  let maxAmount = parseInt(document.getElementById("maxAmount").value,10);
+  let minAmount = parseInt(document.getElementById("minAmount").value,10);
+  if (isNaN(maxAmount)) maxAmount = 0;
+  if (isNaN(minAmount)) minAmount = 0;
+  if (minAmount < 0) minAmount = 0;
+
+  // gather base / fixed / currentDiffs / target sum
+  const baseDiffs = [];
+  const fixedFlags = [];
+  const currentDiffs = [];
+  let targetSum = 0;
+  document.querySelectorAll("#coinTable tbody tr").forEach((tr,i)=>{
+    const target = parseInt(tr.querySelector(".targetUnits").value,10) || 0;
+    const current = parseInt(tr.querySelector(".currentUnits").value,10) || 0;
+    const curDiff = parseInt(tr.querySelector(".diffUnits").value,10) || 0;
+    baseDiffs[i] = Math.max(0, target - current);
+    currentDiffs[i] = curDiff;
+    fixedFlags[i] = !!tr.querySelector(".fixed").checked;
+    targetSum += target;
+  });
+
+  // call DFS
+  const best = findBestCombinationDFS(baseDiffs, currentDiffs, minAmount, maxAmount, targetSum, fixedFlags);
+
+  if(!best || !best.diffs || best.diffs.length === 0) {
+    alert("条件を満たす組み合わせが見つかりませんでした。範囲 (±8) を広げるか条件を緩めてください。");
+    return;
+  }
+
+  // apply best diffs to all rows (for fixed rows best.diffs[i] equals their currentDiff)
+  document.querySelectorAll("#coinTable tbody tr").forEach((tr,i)=>{
+    tr.querySelector(".diffUnits").value = best.diffs[i];
+  });
+
+  // Save and update display
+  saveAll();
+  updateAmounts();
+  alert(`最適解を計算しました\n合計金額: ${document.getElementById("totalAmount").textContent}円\n合計枚数: ${document.getElementById("totalCoins").textContent}枚`);
+}
+
+/* DFS探索（固定対応・1000単位・上下限をDFSでチェック） */
+function findBestCombinationDFS(baseDiffs, currentDiffs, minAmount, maxAmount, targetSum, fixedFlags){
+  const delta = 8;
+  // build ranges: if fixed => use currentDiffs value; otherwise baseDiff ± delta
+  const ranges = baseDiffs.map((v,i)=>{
+    if (fixedFlags[i]) return [ currentDiffs[i] ];
+    const arr = [];
+    const start = Math.max(0, v - delta);
+    const end = v + delta;
+    for (let x = start; x <= end; x++) arr.push(x);
+    return arr;
+  });
+
+  let best = { diffs: [], score: Infinity, amount: 0, coins: 0 };
+
+  // dfs with running totals to prune
+  function dfs(idx, diffs, totalCoins, totalAmount){
+    // early prune by amount
+    if (totalAmount > maxAmount) return;
+
+    if (idx === coins.length) {
+      // end: check min/max and 1000-unit constraints
+      if (totalAmount < minAmount) return;
+      if (totalCoins % 1000 !== 0) return;
+      if (totalAmount % 1000 !== 0) return;
+
+      const sumDiffUnits = diffs.reduce((a,v)=>a+v,0);
+      const score = Math.abs(targetSum - sumDiffUnits);
+
+      if (score < best.score || (score === best.score && totalAmount > best.amount)) {
+        best = { diffs: [...diffs], score, amount: totalAmount, coins: totalCoins };
+      }
+      return;
+    }
+
+    // iterate possibilities for this denom
+    for (let v of ranges[idx]) {
+      // compute contribution properly: v units -> v * perUnit枚 -> * value = amount
+      const addCoins = v * coins[idx].perUnit;
+      const addAmount = addCoins * coins[idx].value;
+      const newTotalCoins = totalCoins + addCoins;
+      const newTotalAmount = totalAmount + addAmount;
+
+      // prune if exceeding max right away
+      if (newTotalAmount > maxAmount) continue;
+
+      dfs(idx + 1, [...diffs, v], newTotalCoins, newTotalAmount);
+    }
+  }
+
+  dfs(0, [], 0, 0);
+  return best;
+}
+
+/* 初期化 */
+createTable();
+</script>
+</body>
+</html>
