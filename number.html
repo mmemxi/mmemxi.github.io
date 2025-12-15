@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>段階別 硬貨計数・誤判定対策ツール</title>
+<style>
+body { font-family: sans-serif; max-width: 900px; padding: 20px; }
+h2 { margin-top: 32px; }
+label { display: block; margin-top: 10px; }
+input { padding: 6px; width: 220px; }
+button { margin-top: 16px; padding: 10px 18px; }
+.result { margin-top: 16px; padding: 12px; border: 1px solid #ccc; background: #f9f9f9; }
+.warning { color: red; font-weight: bold; }
+.ok { color: green; font-weight: bold; }
+.task { margin-left: 1em; }
+</style>
+</head>
+<body>
+
+<h1>段階別 硬貨計数・誤判定対策ツール</h1>
+
+<p>
+作業順序：<br>
+① 1円・50円 → ② 10円・100円 → ③ その他（5円・500円）<br>
+各段階で表示された <strong>累計金額</strong> を入力してください。
+</p>
+
+<hr>
+
+<label>各硬貨の本来の枚数（全種類共通）
+<input type="number" id="coinCount"></label>
+
+<label>誤判定補正のための確保枚数
+<input type="number" id="reserveCount"></label>
+
+<h2>① 第1段階（1円・50円）後の表示金額 <span id="inc1"></span></h2>
+<input type="number" id="stage1">
+
+<h2>② 第2段階（10円・100円）後の表示金額 <span id="inc2"></span></h2>
+<input type="number" id="stage2">
+
+<h2>③ 第3段階（5円・500円）後の表示金額 <span id="inc3"></span></h2>
+<input type="number" id="stage3">
+
+<button onclick="analyze()">解析する</button>
+
+<div class="result" id="output"></div>
+
+<script>
+// ---------------- 共通計算 ----------------
+function calcIdeals() {
+  const useCount = +coinCountEl.value - +reserveCountEl.value;
+  return {
+    inc1: useCount * (1 + 50),
+    inc2: useCount * (10 + 100),
+    inc3: useCount * (5 + 500)
+  };
+}
+
+function updateLabels() {
+  const { inc1, inc2, inc3 } = calcIdeals();
+  inc1El.textContent = `（+${inc1}）`;
+  inc2El.textContent = `（+${inc2}）`;
+  inc3El.textContent = `（+${inc3}）`;
+}
+
+function updateStageDefaults() {
+  const { inc1, inc2, inc3 } = calcIdeals();
+  stage1El.value = inc1;
+  stage2El.value = inc1 + inc2;
+  stage3El.value = inc1 + inc2 + inc3;
+  updateLabels();
+}
+
+function updateFromStage1() {
+  const { inc2, inc3 } = calcIdeals();
+  const s1 = +stage1El.value;
+  stage2El.value = s1 + inc2;
+  stage3El.value = s1 + inc2 + inc3;
+}
+
+function updateFromStage2() {
+  const { inc3 } = calcIdeals();
+  stage3El.value = +stage2El.value + inc3;
+}
+
+// ---------------- 作業指示生成 ----------------
+function task1(diff) {
+  if (diff === 0) return '作業不要';
+  if (diff % 49 === 0) {
+    const n = diff / 49;
+    return `1円と50円を ${Math.abs(n)} 枚入れ替える`;
+  }
+  if (diff % 1 === 0) return `1円を ${Math.abs(diff)} 枚調整投入`;
+  return '想定外の誤差（再計数推奨）';
+}
+
+function task2(diff) {
+  if (diff === 0) return '作業不要';
+  if (diff % 90 === 0) {
+    const n = diff / 90;
+    return `10円と100円を ${Math.abs(n)} 枚入れ替える`;
+  }
+  if (diff % 10 === 0) return `10円を ${Math.abs(diff / 10)} 枚調整投入`;
+  return '想定外の誤差（再計数推奨）';
+}
+
+function task3(diff) {
+  if (diff === 0) return '作業不要';
+  if (diff % 500 === 0) return `500円を ${Math.abs(diff / 500)} 枚調整`;
+  if (diff % 5 === 0) return `5円を ${Math.abs(diff / 5)} 枚調整`;
+  return '想定外の誤差（再計数推奨）';
+}
+
+// ---------------- 解析本体 ----------------
+function analyze() {
+  const useCount = +coinCountEl.value - +reserveCountEl.value;
+
+  const ideal1 = useCount * (1 + 50);
+  const ideal2 = ideal1 + useCount * (10 + 100);
+  const ideal3 = ideal2 + useCount * (5 + 500);
+
+  const s1 = +stage1El.value;
+  const s2 = +stage2El.value;
+  const s3 = +stage3El.value;
+
+  const diff1 = s1 - ideal1;
+  const diff2 = s2 - ideal2 - diff1;
+  const diff3 = s3 - ideal3 - diff1 - diff2;
+
+  let html = '';
+
+  html += `<h3>第1段階（1円・50円）</h3>`;
+  html += `<div>誤差：${diff1} 円</div>`;
+  html += `<div class="task">➡ ${task1(diff1)}</div>`;
+
+  html += `<h3>第2段階（10円・100円）</h3>`;
+  html += `<div>誤差：${diff2} 円</div>`;
+  html += `<div class="task">➡ ${task2(diff2)}</div>`;
+
+  html += `<h3>第3段階（5円・500円）</h3>`;
+  html += `<div>誤差：${diff3} 円</div>`;
+  html += `<div class="task">➡ ${task3(diff3)}</div>`;
+
+  html += `<hr><strong>累計誤差：</strong> ${diff1 + diff2 + diff3} 円`;
+
+  outputEl.innerHTML = html;
+}
+
+// ---------------- 入力補助・保存 ----------------
+function enableAutoSelect() {
+  document.querySelectorAll('input').forEach(el => el.addEventListener('focus', e => e.target.select()));
+}
+
+function saveSettings() {
+  localStorage.setItem('coinCount', coinCountEl.value);
+  localStorage.setItem('reserveCount', reserveCountEl.value);
+}
+
+function loadSettings() {
+  if (localStorage.getItem('coinCount')) coinCountEl.value = localStorage.getItem('coinCount');
+  if (localStorage.getItem('reserveCount')) reserveCountEl.value = localStorage.getItem('reserveCount');
+}
+
+// ---------------- 初期化 ----------------
+const coinCountEl = document.getElementById('coinCount');
+const reserveCountEl = document.getElementById('reserveCount');
+const stage1El = document.getElementById('stage1');
+const stage2El = document.getElementById('stage2');
+const stage3El = document.getElementById('stage3');
+const inc1El = document.getElementById('inc1');
+const inc2El = document.getElementById('inc2');
+const inc3El = document.getElementById('inc3');
+const outputEl = document.getElementById('output');
+
+window.addEventListener('DOMContentLoaded', () => {
+  loadSettings();
+  enableAutoSelect();
+
+  coinCountEl.addEventListener('input', () => { saveSettings(); updateStageDefaults(); });
+  reserveCountEl.addEventListener('input', () => { saveSettings(); updateStageDefaults(); });
+
+  stage1El.addEventListener('input', updateFromStage1);
+  stage2El.addEventListener('input', updateFromStage2);
+
+  updateStageDefaults();
+});
+</script>
+
+</body>
+</html>
