@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>硬貨計数 誤差補正ナビ（完全版）</title>
+<title>計数機誤差補正ナビ</title>
 <style>
 body { font-family: system-ui, sans-serif; line-height: 1.6; padding: 16px; font-size:150%;}
-h1 { font-size: 1.4em; }
+h1 { font-size: 1.3em; }
 h2 { font-size: 1.1em; }
 .section { margin-bottom: 20px; }
 label { display: block; margin-top: 12px; }
@@ -21,48 +21,50 @@ input { font-size: 1.1em; padding: 8px; width: 100%; box-sizing: border-box; }
 </head>
 <body>
 
-<h1>硬貨計数 誤差補正ナビ（完全版）</h1>
+<h1>計数機誤差補正ナビ</h1>
 
 <div class="section box" style="font-size:80%;">
   <h2>作業手順</h2>
   <div>・まず、「各硬貨種の枚数」を入力してください。</div>
   <div>・①1/10/100円、②5/50/500円の２段階に分けて計数機に投入します。</div>
   <div>・①②それぞれ投入後、各２枚ずつ硬貨を取り出しておいてください（リザーブ）</div>
-  <div>・①を計数し結果を「第１段階計数機表示金額」に入力すると、誤差があると対策が表示されます。</div>
-  <div>・次に②を計数し結果を「第２段階計数機表示金額」に入力すると、誤差があると対策が表示されます。</div>
-  <div>・最後に「リザーブ」を投入すると、正常に計数を終えることができます。</div>
+  <div>・①を計数し結果を「①計数機表示金額」に入力すると、誤差があると対策が表示されます。</div>
+  <div>・次に②を計数し結果を「②計数機表示金額」に入力すると、誤差があると対策が表示されます。</div>
+  <div>・最後に「リザーブ」を投入すると、「完成金額」になるはずです。</div>
 </div>
 
 <div class="section boxc">
-  <label>① 各硬貨種の枚数（全種類共通）
+  <label>各硬貨種の枚数
     <input type="number" id="count" min="1">
   </label>
 </div>
 
 <div class="section box">
-  <div><strong>リザーブ金額：</strong>1332 円</div>
-  <div><strong>理論金額1：</strong><span id="ideal1">-</span> 円</div>
-  <div><strong>理論金額2：</strong><span id="ideal2">-</span> 円</div>
-  <div><strong>目標金額：</strong><span id="target">-</span> 円</div>
+  <div><strong>リザーブ金額：</strong><span id="reserve">-</span>円</div>
+  <div><strong>理論金額1：</strong><span id="ideal1">-</span>円</div>
+  <div><strong>理論金額2：</strong><span id="ideal2">-</span>円</div>
+  <div><strong>目標金額：</strong><span id="target">-</span>円</div>
+  <div><strong>完成金額：</strong><span id="complete">-</span>円</div>
 </div>
 
 <div class="section boxc">
-  <div><strong>予想金額1：</strong><span id="expect1">-</span> 円</div>
-  <label>② 第1段階 計数機表示金額
+  <div><strong>①第１段階：</strong><br>予想金額<span id="expect1">-</span>円</div>
+  <label>計数機表示金額
     <input type="number" id="actual1">
   </label>
   <div class="result" id="action1"></div>
 </div>
 
 <div class="section boxc">
-  <div><strong>予想金額2：</strong><span id="expect2">-</span> 円</div>
-  <label>③ 第2段階 計数機表示金額
+  <div><strong>②第２段階：</strong><br>予想金額<span id="expect2">-</span>円</div>
+  <label>計数機表示金額
     <input type="number" id="actual2">
   </label>
   <div class="result" id="action2"></div>
 </div>
 
 <script>
+var g_ideal2,g_expect1,g_expect2;
 const RESERVE_PER_COIN = 2;
 const VALUES1 = [1, 10, 100];
 const VALUES2 = [5, 50, 500];
@@ -88,13 +90,18 @@ function recalc() {
   const ideal1 = use * sum(VALUES1);
   const ideal2 = use * sum(VALUES2);
 
-  document.getElementById('ideal1').textContent = ideal1;
-  document.getElementById('ideal2').textContent = ideal2;
-  document.getElementById('target').textContent = ideal1 + ideal2;
-  document.getElementById('expect1').textContent = ideal1;
+  g_ideal2=ideal2;
+  g_expect1=ideal1;
+  if (!a1.value) g_expect2=ideal1+ideal2;
+		else	 g_expect2=parseInt(a1.value,10)+ideal2;
 
-  if (!a1.value) document.getElementById('expect2').textContent = ideal1 + ideal2;
-  else document.getElementById('expect2').textContent = +a1.value + ideal2;
+  document.getElementById('reserve').textContent = formatNumber(1332);
+  document.getElementById('ideal1').textContent = formatNumber(ideal1);
+  document.getElementById('ideal2').textContent = formatNumber(ideal2);
+  document.getElementById('target').textContent = formatNumber(ideal1 + ideal2);
+  document.getElementById('complete').textContent = formatNumber(ideal1 + ideal2 + 1332);
+  document.getElementById('expect1').textContent = formatNumber(ideal1);
+  document.getElementById('expect2').textContent = formatNumber(g_expect2);
 }
 
 function analyzeStage(diff, stage) {
@@ -149,15 +156,17 @@ function update1() {
   a2.value = '';
   document.getElementById('action2').textContent = '';
   if (!a1.value) return;
-  const diff = +a1.value - +document.getElementById('expect1').textContent;
+  const diff = parseInt(a1.value,10) - g_expect1;
+  console.log(a1.value + ":" + diff);
   const res = diff === 0 ? '正常です。' : analyzeStage(diff, 1);
   document.getElementById('action1').textContent = res;
-  document.getElementById('expect2').textContent = +a1.value + +document.getElementById('ideal2').textContent;
+  g_expect2=parseInt(a1.value,10)+g_ideal2;
+  document.getElementById('expect2').textContent = formatNumber(g_expect2);
 }
 
 function update2() {
   if (!a2.value) return;
-  const diff = +a2.value - +document.getElementById('expect2').textContent;
+  const diff = +a2.value - +g_expect2;
   const res = diff === 0 ? '正常です。' : analyzeStage(diff, 2);
   document.getElementById('action2').textContent = res;
 }
@@ -173,6 +182,16 @@ a1.addEventListener('input', update1);
 a2.addEventListener('input', update2);
 
 recalc();
+
+function formatNumber(num) {
+  if (num === null || num === undefined || num === '') return '';
+
+  const n = Number(num);
+  if (isNaN(n)) return '';
+
+  r=""+n.toLocaleString('ja-JP');
+  return r.trim();
+}
 </script>
 
 </body>
