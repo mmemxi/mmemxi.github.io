@@ -134,14 +134,14 @@ function analyzeStage(diff, stage) {
   if (misdetects.length || shortages.length) {
     let result = '';
     if (misdetects.length) {
-      result += '【手順① 誤判定の確認】';
+      result += '【① 硬貨誤判定】';
       result += misdetects.join('') + '';
       result += '→ 筒の中身を確認し、該当する硬貨をリザーブと入れ替えてください。';
     }
     if (shortages.length) {
-      result += '【手順② 枚数過不足の調整】';
+      result += '【② 枚数過不足】';
       result += shortages.join('') + '';
-      result += '→ 余剰金で枚数を調整してください。';
+      result += '→ 多いならリザーブをロッカーに、不足ならロッカーからリザーブに追加してください。';
     }
     return result;
   }
