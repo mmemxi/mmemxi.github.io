@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>硬貨計数 誤差補正ナビ（完全版）</title>
+<style>
+body { font-family: system-ui, sans-serif; line-height: 1.6; padding: 16px; font-size:150%;}
+h1 { font-size: 1.4em; }
+h2 { font-size: 1.1em; }
+.section { margin-bottom: 20px; }
+label { display: block; margin-top: 12px; }
+input { font-size: 1.1em; padding: 8px; width: 100%; box-sizing: border-box; }
+.box { background: #f7f7f7; padding: 12px; border-radius: 8px; }
+.boxc { background: #ffffaa; padding: 12px; border-radius: 8px; }
+.result { margin-top: 8px; font-weight: bold; }
+.ok { color: green; }
+.warn { color: #c00; }
+.note { color: #555; font-size: 0.95em; }
+</style>
+</head>
+<body>
+
+<h1>硬貨計数 誤差補正ナビ（完全版）</h1>
+
+<div class="section box" style="font-size:80%;">
+  <h2>作業手順</h2>
+  <div>・まず、「各硬貨種の枚数」を入力してください。</div>
+  <div>・①1/10/100円、②5/50/500円の２段階に分けて計数機に投入します。</div>
+  <div>・①②それぞれ投入後、各２枚ずつ硬貨を取り出しておいてください（リザーブ）</div>
+  <div>・①を計数し結果を「第１段階計数機表示金額」に入力すると、誤差があると対策が表示されます。</div>
+  <div>・次に②を計数し結果を「第２段階計数機表示金額」に入力すると、誤差があると対策が表示されます。</div>
+  <div>・最後に「リザーブ」を投入すると、正常に計数を終えることができます。</div>
+</div>
+
+<div class="section boxc">
+  <label>① 各硬貨種の枚数（全種類共通）
+    <input type="number" id="count" min="1">
+  </label>
+</div>
+
+<div class="section box">
+  <div><strong>リザーブ金額：</strong>1332 円</div>
+  <div><strong>理論金額1：</strong><span id="ideal1">-</span> 円</div>
+  <div><strong>理論金額2：</strong><span id="ideal2">-</span> 円</div>
+  <div><strong>目標金額：</strong><span id="target">-</span> 円</div>
+</div>
+
+<div class="section boxc">
+  <div><strong>予想金額1：</strong><span id="expect1">-</span> 円</div>
+  <label>② 第1段階 計数機表示金額
+    <input type="number" id="actual1">
+  </label>
+  <div class="result" id="action1"></div>
+</div>
+
+<div class="section boxc">
+  <div><strong>予想金額2：</strong><span id="expect2">-</span> 円</div>
+  <label>③ 第2段階 計数機表示金額
+    <input type="number" id="actual2">
+  </label>
+  <div class="result" id="action2"></div>
+</div>
+
+<script>
+const RESERVE_PER_COIN = 2;
+const VALUES1 = [1, 10, 100];
+const VALUES2 = [5, 50, 500];
+
+const countEl = document.getElementById('count');
+const a1 = document.getElementById('actual1');
+const a2 = document.getElementById('actual2');
+
+[countEl, a1, a2].forEach(el => {
+  el.addEventListener('focus', () => el.select());
+});
+
+countEl.value = localStorage.getItem('coinCount') || 70;
+
+function sum(vals) { return vals.reduce((a,b)=>a+b,0); }
+
+function recalc() {
+  const c = +countEl.value;
+  if (!c) return;
+  localStorage.setItem('coinCount', c);
+
+  const use = c - RESERVE_PER_COIN;
+  const ideal1 = use * sum(VALUES1);
+  const ideal2 = use * sum(VALUES2);
+
+  document.getElementById('ideal1').textContent = ideal1;
+  document.getElementById('ideal2').textContent = ideal2;
+  document.getElementById('target').textContent = ideal1 + ideal2;
+  document.getElementById('expect1').textContent = ideal1;
+
+  if (!a1.value) document.getElementById('expect2').textContent = ideal1 + ideal2;
+  else document.getElementById('expect2').textContent = +a1.value + ideal2;
+}
+
+function analyzeStage(diff, stage) {
+  let messages = [];
+
+  // ① 硬貨種の誤判定（最優先・両段階共通）
+  let misdetects = [];
+
+  // 1円 ↔ 50円 : ±49円
+  if (diff % 49 === 0 && Math.abs(diff / 49) <= 5) {
+    const n = diff / 49;
+    misdetects.push(`・1円と50円の誤判定の可能性（${Math.abs(n)} 枚）`);
+  }
+  // 10円 ↔ 100円 : ±90円
+  if (diff % 90 === 0 && Math.abs(diff / 90) <= 5) {
+    const n = diff / 90;
+    misdetects.push(`・10円と100円の誤判定の可能性（${Math.abs(n)} 枚）`);
+  }
+
+  // ② ±2枚以内の枚数過不足
+  let shortages = [];
+  const coins = stage === 1 ? VALUES1 : VALUES2;
+  for (const v of coins) {
+    if (diff % v === 0 && Math.abs(diff / v) <= 2) {
+      const n = diff / v;
+      shortages.push(`・${v}円が ${Math.abs(n)} 枚 ${n < 0 ? '不足' : '多い'}可能性`);
+    }
+  }
+
+  if (misdetects.length || shortages.length) {
+    let result = '';
+    if (misdetects.length) {
+      result += '【手順① 誤判定の確認】';
+      result += misdetects.join('') + '';
+      result += '→ 筒の中身を確認し、該当する硬貨をリザーブと入れ替えてください。';
+    }
+    if (shortages.length) {
+      result += '【手順② 枚数過不足の調整】';
+      result += shortages.join('') + '';
+      result += '→ 余剰金で枚数を調整してください。';
+    }
+    return result;
+  }
+
+  // ③ それ以外
+  return '誤差が大きいため、まず筒の中身を確認してください。';
+}
+
+function update1() {
+  recalc();
+  document.getElementById('action1').textContent = '';
+  a2.value = '';
+  document.getElementById('action2').textContent = '';
+  if (!a1.value) return;
+  const diff = +a1.value - +document.getElementById('expect1').textContent;
+  const res = diff === 0 ? '正常です。' : analyzeStage(diff, 1);
+  document.getElementById('action1').textContent = res;
+  document.getElementById('expect2').textContent = +a1.value + +document.getElementById('ideal2').textContent;
+}
+
+function update2() {
+  if (!a2.value) return;
+  const diff = +a2.value - +document.getElementById('expect2').textContent;
+  const res = diff === 0 ? '正常です。' : analyzeStage(diff, 2);
+  document.getElementById('action2').textContent = res;
+}
+
+countEl.addEventListener('input', () => {
+  a1.value = ''; a2.value = '';
+  document.getElementById('action1').textContent = '';
+  document.getElementById('action2').textContent = '';
+  recalc();
+});
+
+a1.addEventListener('input', update1);
+a2.addEventListener('input', update2);
+
+recalc();
+</script>
+
+</body>
+</html>
