@@ -20,6 +20,7 @@ var viewLane=1;		//	表示中の現在レーン(1～7)
 var viewMode=0;		//	0:現在値  1:目標値
 var viewOrder=1;	//	0:降順    1:昇順
 var voiceMode=false;
+var viewHistory=false;
 //----------------------------------------------------------------
 var inputs;
 var currentIndex = 0;
@@ -37,6 +38,13 @@ defaultA=new Array("150,70,70,70,70,70,70","150,70,70,70,70,70,70","150,70,70,70
 // 土日祝日デフォルト
 defaultB=new Array("150,80,80,80,80,80,80","150,80,80,80,80,80,80","150,80,80,80,80,80,80","150,80,80,80,80,80,80","50,50,50,50,50,50,50","50,50,50,50,50,50,50","40,40,40,30,30,30,30");
 defaultB=new Array("180,80,80,80,80,80,80","180,80,80,80,80,80,80","180,80,80,80,80,80,80","180,80,80,80,80,80,80","120,70,70,70,70,70,70","120,70,70,70,70,70,70","40,40,40,30,30,30,30");
+
+// 保存済みの目標値があれば、プログラム内の初期値より優先する
+var targetStorageKeyA="coinCounterTargetsWeekday";
+var targetStorageKeyB="coinCounterTargetsWeekend";
+defaultA=loadTargetDefaults(targetStorageKeyA,defaultA);
+defaultB=loadTargetDefaults(targetStorageKeyB,defaultB);
+var selectedTargetPreset=isTomorrowWeekend() ? 1 : 0;
 
 // 目標値テーブル
 var targets=new  Array(7);
@@ -96,6 +104,7 @@ function drawLanes()
 	if (viewMode==0)
 		{
 		buf+="<button style='font-size:120%' onclick='resetIt()'>リセット</button>";
+		buf+="<button style='font-size:120%' onclick='toggleHistory()'>履歴</button>";
 		}
 	buf+="<br><br>";
 	
@@ -186,16 +195,30 @@ function drawLanes()
 		}
 	buf+="</table></div><br>";
 	buf+="<div style='font-size:120%'>コイン合計額：￥"+totalKin.toLocaleString('ja-JP')+"</div><br>";
+	if (viewMode==0 && viewHistory) buf+=drawHistory();
 	if (viewMode==1)
 		{
 		buf+="<button style='font-size:120%' onclick='presetDefault(0)'>平日の目標値</button><br>";
 		buf+="<button style='font-size:120%' onclick='presetDefault(1)'>土日祝の目標値</button><br>";
+		buf+="<div style='margin-top:1em;padding:0.8em;border:1px solid #999;max-width:500px;'>";
+		buf+="<div style='font-weight:bold;margin-bottom:0.5em;'>目標値の一括設定</div>";
+		buf+="<label>1～4レーン：1・5・10・50・100・500円（共通）<br><input id='bulk14Coins' type='number' min='0' step='1' value='"+targets[0][1]+"' style='font-size:120%;width:100px;'></label><br><br>";
+		buf+="<label>1～4レーン：1000円<br><input id='bulk14Thousand' type='number' min='0' step='1' value='"+targets[0][0]+"' style='font-size:120%;width:100px;'></label><br><br>";
+		buf+="<label>5～6レーン：1・5・10・50・100・500円（共通）<br><input id='bulk56Coins' type='number' min='0' step='1' value='"+targets[4][1]+"' style='font-size:120%;width:100px;'></label><br><br>";
+		buf+="<label>5～6レーン：1000円<br><input id='bulk56Thousand' type='number' min='0' step='1' value='"+targets[4][0]+"' style='font-size:120%;width:100px;'></label><br><br>";
+		buf+="<button style='font-size:120%' onclick='applyBulkTargets()'>各レーンに反映</button>";
+		buf+="</div>";
+		buf+="<br><button style='font-size:120%' onclick='saveTargetDefaults()'>この目標値を";
+		if (selectedTargetPreset==0) buf+="平日用";else buf+="土日祝用";
+		buf+="として保存</button><br>";
+		buf+="<span style='font-size:80%'>保存後は翌日の曜日に合わせて自動的に使用されます。</span><br>";
 		}
 	document.getElementById("maintable").innerHTML=buf;
 	}
 
 function presetDefault(num)
 	{
+	selectedTargetPreset=num;
 	if (num==0)
 		{
 		targets=setDefaults(defaultA);		//	平日デフォルト
@@ -206,11 +229,72 @@ function presetDefault(num)
 	drawLanes();
 	}
 
+function saveTargetDefaults()
+	{
+	var values=new Array(7);
+	var i;
+	for(i=0;i<=6;i++) values[i]=targets[i].join(",");
+	var key=selectedTargetPreset==0 ? targetStorageKeyA : targetStorageKeyB;
+	localStorage.setItem(key,JSON.stringify(values));
+	if (selectedTargetPreset==0) defaultA=values;else defaultB=values;
+	alert(selectedTargetPreset==0 ? "平日用の目標値を保存しました。" : "土日祝用の目標値を保存しました。");
+	}
+
+function applyBulkTargets()
+	{
+	var ids=new Array("bulk14Coins","bulk14Thousand","bulk56Coins","bulk56Thousand");
+	var values=new Array(4);
+	var i,j;
+	for(i=0;i<ids.length;i++)
+		{
+		var raw=document.getElementById(ids[i]).value.trim();
+		if (raw==="" || isNaN(raw) || parseInt(raw,10)<0 || parseFloat(raw)!=parseInt(raw,10))
+			{
+			alert("4つの項目に0以上の整数を入力してください。");
+			document.getElementById(ids[i]).focus();
+			return;
+			}
+		values[i]=parseInt(raw,10);
+		}
+
+	for(i=0;i<=3;i++)
+		{
+		targets[i][0]=values[1];
+		for(j=1;j<=6;j++) targets[i][j]=values[0];
+		}
+	for(i=4;i<=5;i++)
+		{
+		targets[i][0]=values[3];
+		for(j=1;j<=6;j++) targets[i][j]=values[2];
+		}
+	alert("1～6レーンの目標値に反映しました。保存する場合は下の保存ボタンを押してください。");
+	drawLanes();
+	}
+
+function loadTargetDefaults(key,fallback)
+	{
+	try
+		{
+		var saved=JSON.parse(localStorage.getItem(key));
+		if (Array.isArray(saved) && saved.length==7)
+			{
+			for(var i=0;i<7;i++)
+				{
+				if (typeof saved[i]!="string" || saved[i].split(",").length!=7) return fallback;
+				}
+			return saved;
+			}
+		}
+	catch(e){}
+	return fallback;
+	}
+
 function resetIt()
 	{
 	var r=confirm("現在値をリセットしてもよろしいですか？");
 	if (!r) return;
 	var i,j;
+	saveLaneHistory(viewLane-1);
 	for(i=0;i<=6;i++)
 		{
 		tables[viewLane-1][i]="";
@@ -218,6 +302,84 @@ function resetIt()
 		setLocaldata(key,"");
 		}
 	drawLanes();
+	}
+
+function toggleHistory()
+	{
+	viewHistory=!viewHistory;
+	drawLanes();
+	}
+
+function historyStorageKey(lane)
+	{
+	return "coinCounterHistoryLane"+lane;
+	}
+
+function getLaneHistory(lane)
+	{
+	try
+		{
+		var history=JSON.parse(localStorage.getItem(historyStorageKey(lane)));
+		if (Array.isArray(history)) return history.slice(0,5);
+		}
+	catch(e){}
+	return new Array();
+	}
+
+function saveLaneHistory(lane)
+	{
+	var history=getLaneHistory(lane);
+	var values=new Array(7);
+	for(var i=0;i<=6;i++) values[i]=tables[lane][i];
+	history.unshift({savedAt:new Date().toISOString(),values:values});
+	localStorage.setItem(historyStorageKey(lane),JSON.stringify(history.slice(0,5)));
+	}
+
+function drawHistory()
+	{
+	var history=getLaneHistory(viewLane-1);
+	var buf="<div style='margin-bottom:1em;padding:0.8em;border:1px solid #999;max-width:650px;'>";
+	buf+="<div style='font-weight:bold;margin-bottom:0.5em;'>"+viewLane+"レーンのリセット履歴（最新5件）</div>";
+	if (history.length==0)
+		{
+		buf+="<div>履歴はありません。</div></div>";
+		return buf;
+		}
+	for(var h=0;h<history.length;h++)
+		{
+		var entry=history[h];
+		var date=new Date(entry.savedAt);
+		var dateText=isNaN(date.getTime()) ? entry.savedAt : date.toLocaleString("ja-JP");
+		buf+="<div style='margin-top:0.8em;padding-top:0.8em;border-top:1px solid #ccc;'>";
+		buf+="<div><strong>"+dateText+"</strong></div>";
+		buf+="<table border='1' cellspacing='0' cellpadding='3'><tr>";
+		for(var i=0;i<=6;i++) buf+="<th>"+coinType[i].toLocaleString("ja-JP")+"円</th>";
+		buf+="</tr><tr>";
+		for(var j=0;j<=6;j++) buf+="<td style='text-align:right'>"+(entry.values[j]==="" ? "－" : entry.values[j])+"</td>";
+		buf+="</tr></table>";
+		buf+="<button style='font-size:100%;margin-top:0.4em' onclick='restoreLaneHistory("+h+")'>この履歴に戻す</button>";
+		buf+="</div>";
+		}
+	buf+="</div>";
+	return buf;
+	}
+
+function restoreLaneHistory(historyIndex)
+	{
+	var history=getLaneHistory(viewLane-1);
+	var entry=history[historyIndex];
+	if (!entry || !Array.isArray(entry.values) || entry.values.length!=7)
+		{
+		alert("履歴を読み込めませんでした。");
+		return;
+		}
+	for(var i=0;i<=6;i++)
+		{
+		tables[viewLane-1][i]=entry.values[i];
+		setLocaldata((viewLane-1)+"&"+i,entry.values[i]);
+		}
+	drawLanes();
+	alert("履歴から復元しました");
 	}
 
 function changeLanes()
